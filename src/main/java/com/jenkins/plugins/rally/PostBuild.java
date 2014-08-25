@@ -67,6 +67,9 @@ public class PostBuild extends Builder {
 	@Override
     public boolean perform(AbstractBuild build, Launcher launcher, BuildListener listener) {
     	PrintStream out = listener.getLogger();
+
+        out.println("rally-update plugin getting changes...");
+
     	Changes changes = null;
     	changes = PostBuildHelper.getChanges(changesSince, startDate, endDate, build, out);
     	
@@ -74,6 +77,9 @@ public class PostBuild extends Builder {
     	boolean result;
     	try {
     		rallyConnector = new RallyConnector(userName, password, workspace, project, scmuri, scmRepoName, proxy);
+
+            out.println("rally-update plugin found " + changes.getChangeInformation().size() + " changes...");
+
 	        for(ChangeInformation ci : changes.getChangeInformation()) { //build level
 	        	try {
 		        	for(Object item : ci.getChangeLogSet().getItems()) { //each changes in above build

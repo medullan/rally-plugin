@@ -52,8 +52,9 @@ public class PostBuildHelper {
 			rdto.setStory(true);
 			populateTaskDetails(rdto, cse.getMsg());
 		}	
-		else
-			rdto.setStory(false);
+		else {
+            rdto.setStory(false);
+        }
 
 		rdto.setRevison(cse.getCommitId());
 
@@ -142,7 +143,7 @@ public class PostBuildHelper {
     	Pattern p = Pattern.compile(regEx, Pattern.CASE_INSENSITIVE);
 		Matcher m = p.matcher(comment);
 		if(m.find())
-			result = m.group(0);
+			result = m.group(1);
 		return result;
     }
 }
