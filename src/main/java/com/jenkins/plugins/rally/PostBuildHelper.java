@@ -47,30 +47,34 @@ public class PostBuildHelper {
 		rdto.setId(getId(cse));
 		rdto.setOut(out);
 		rdto.setDebugOn(Boolean.valueOf(debugOn));
+
 		if(rdto.getId().startsWith("US")) {
 			rdto.setStory(true);
 			populateTaskDetails(rdto, cse.getMsg());
 		}	
 		else
-			rdto.setStory(false);			
+			rdto.setStory(false);
+
 		rdto.setRevison(cse.getCommitId());
+
 		if(cse.getTimestamp() == -1)
 			rdto.setTimeStamp(ci.getBuildTimeStamp());
 		else
 			rdto.setTimeStamp(toTimeZoneTimeStamp(cse.getTimestamp()));
+
 		return rdto;
     }
     
     static void populateTaskDetails(final RallyDetailsDTO rdto, final String msg) {
-    	String comment = msg;
-    	if(comment != null) {
-    		rdto.setTaskIndex(getRallyAttrValue(comment.toUpperCase(), RallyAttributes.TaskIndex));
-    		rdto.setTaskID(getRallyAttrValue(comment.toUpperCase(), RallyAttributes.TaskID));
-    		String rallyStatus = mapStatusToRallyStatus(getRallyAttrValue(comment.toUpperCase(), RallyAttributes.Status));
+    	if(msg != null) {
+            String comment = msg.toUpperCase();
+    		rdto.setTaskIndex(getRallyAttrValue(comment, RallyAttributes.TaskIndex));
+    		rdto.setTaskID(getRallyAttrValue(comment, RallyAttributes.TaskID));
+    		String rallyStatus = mapStatusToRallyStatus(getRallyAttrValue(comment, RallyAttributes.Status));
     		rdto.setTaskStatus(rallyStatus);
-    		rdto.setTaskActuals(getRallyAttrValue(comment.toUpperCase(), RallyAttributes.Actuals));
-    		rdto.setTaskToDO(getRallyAttrValue(comment.toUpperCase(), RallyAttributes.ToDo));
-    		rdto.setTaskEstimates(getRallyAttrValue(comment.toUpperCase(), RallyAttributes.Estimates));
+    		rdto.setTaskActuals(getRallyAttrValue(comment, RallyAttributes.Actuals));
+    		rdto.setTaskToDO(getRallyAttrValue(comment, RallyAttributes.ToDo));
+    		rdto.setTaskEstimates(getRallyAttrValue(comment, RallyAttributes.Estimates));
     	}
     }
     
@@ -128,16 +132,14 @@ public class PostBuildHelper {
     	String id = "";
     	String comment = cse.getMsg();
     	if(comment != null) {
-    		id = evaluteRegEx(comment, "US[0-9]+[\\w]*");
-    		if(id.isEmpty())
-    			id = evaluteRegEx(comment, "DE[0-9]+[\\w]*");
+    		id = evaluteRegEx(comment, "(US\\d+|DE\\d+)[\\w]*");
     	}	
-    	return id.trim();
+    	return id;
     }
     
     static String evaluteRegEx(String comment, String regEx) {
 		String result = "";
-    	Pattern p = Pattern.compile(regEx);
+    	Pattern p = Pattern.compile(regEx, Pattern.CASE_INSENSITIVE);
 		Matcher m = p.matcher(comment);
 		if(m.find())
 			result = m.group(0);
