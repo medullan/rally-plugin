@@ -58,7 +58,80 @@ public class RallyConnector {
 	public void closeConnection() throws IOException {
 		restApi.close();
 	}
-	
+
+    public boolean updateRallyTestCaseResult(
+            String name, String description, String suite, String build, boolean passed, String date, String reason)
+    throws IOException, NullPointerException {
+        JsonObject testCaseRef = null;//createTestCaseRef(name);
+        if (testCaseRef == null){
+            testCaseRef = createTestCase(name, description, suite);
+            CreateRequest createRequest = new CreateRequest("TestCase", testCaseRef);
+            CreateResponse createResponse = restApi.create(createRequest);
+
+            //printWarnningsOrErrors(createResponse, rdto, "updateRallyTestCaseResult.createTestCaseRef");
+
+            if(!createResponse.wasSuccessful()) {
+                return false;
+            }
+        }
+
+        JsonObject testCaseResult = createTestCaseResult(build, passed, reason, date);
+
+        testCaseResult.add("TestCase", testCaseRef); //createResponse.getObject().get("_ref").getAsString();
+
+        CreateRequest createRequest = new CreateRequest("TestCaseResult", testCaseRef);
+        CreateResponse createResponse = restApi.create(createRequest);
+        //printWarnningsOrErrors(createResponse, rdto, "updateRallyTestCaseResult.CreateChangeSet");
+
+        return createResponse.wasSuccessful();
+    }
+
+    private JsonObject createTestCase(String name, String description, String testPackage)  {
+        JsonObject newObject = new JsonObject();
+
+        newObject.addProperty("Name", name);
+        newObject.addProperty("Description", description);
+        newObject.addProperty("Type", "Functional");
+        newObject.addProperty("Method", "Automated");
+
+        if(testPackage != null) newObject.addProperty("Package", testPackage);
+
+        return newObject;
+    }
+
+    private JsonObject createTestCaseResult(String build, boolean passed, String failReason, String date) {
+        JsonObject newObject = new JsonObject();
+
+        if(!passed && failReason != null) newObject.addProperty("Notes", failReason);
+
+        newObject.addProperty("Build", build);
+        newObject.addProperty("Tester", userName);
+        newObject.addProperty("Verdict", passed ? "Pass" : "Fail");
+        newObject.addProperty("Date", date);
+        //newObject.addProperty("Duration", userName);
+
+        return newObject;
+    }
+
+    private JsonObject createTestCaseRef(String name) throws IOException {
+        QueryRequest  request = new QueryRequest("testcase");
+
+        request.setFetch(new Fetch("FormattedID","Name", "LastVerdict"));
+        request.setQueryFilter(new QueryFilter("Name", "=", name));
+        request.setWorkspace(workspace);
+        request.setProject(project);
+
+        QueryResponse response = restApi.query(request);
+        printWarnningsOrErrors(response, null, "createTestCaseRef");
+
+        if(response.getResults().size() > 0) {
+            JsonObject jsonObject = response.getResults().get(0).getAsJsonObject();
+            return jsonObject;
+        }
+
+        return null;
+    }
+
 	public boolean updateRallyChangeSet(RallyDetailsDTO rdto) throws IOException {
 		rdto.getOut().println("Updating Rally -- " + rdto.getMsg());
 		JsonObject newChangeset = createChangeSet(rdto);
@@ -171,20 +244,20 @@ public class RallyConnector {
 		}
 		return result;
 	}
-	
-	private JsonObject createTaskRef(String storyRef, String taskQueryAttr, String taskQueryValue, RallyDetailsDTO rdto) throws IOException {
-		QueryRequest taskRequest = new QueryRequest("Task");
+
+    private JsonObject createTaskRef(String storyRef, String taskQueryAttr, String taskQueryValue, RallyDetailsDTO rdto) throws IOException {
+        QueryRequest taskRequest = new QueryRequest("Task");
         taskRequest.setFetch(new Fetch("FormattedID", "Actuals", "State"));
         QueryFilter qf = new QueryFilter("WorkProduct", "=", storyRef);
-       	qf = qf.and(new QueryFilter(taskQueryAttr, "=", taskQueryValue));
+        qf = qf.and(new QueryFilter(taskQueryAttr, "=", taskQueryValue));
         taskRequest.setQueryFilter(qf);
         QueryResponse taskQueryResponse = restApi.query(taskRequest);
         printWarnningsOrErrors(taskQueryResponse, rdto, "createTaskRef");
         JsonObject taskRef = taskQueryResponse.getResults().get(0).getAsJsonObject();
         return taskRef;
-    }	
+    }
 
-	private JsonObject createSCMRef(RallyDetailsDTO rdto) throws IOException {
+    private JsonObject createSCMRef(RallyDetailsDTO rdto) throws IOException {
         QueryRequest scmRequest = new QueryRequest("SCMRepository");
         scmRequest.setFetch(new Fetch("ObjectID","Name","SCMType"));
         scmRequest.setWorkspace(workspace);
@@ -227,7 +300,7 @@ public class RallyConnector {
 	
 	private String getAnyOtherRepoName(RallyDetailsDTO rdto) throws IOException {
 		QueryRequest scmRequest = new QueryRequest("SCMRepository");
-        scmRequest.setFetch(new Fetch("ObjectID","Name","Name"));        
+        scmRequest.setFetch(new Fetch("ObjectID","Name","Name"));
         scmRequest.setWorkspace(workspace);
         String anyOtherRepoName = "";
         try {
