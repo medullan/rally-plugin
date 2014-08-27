@@ -9,8 +9,8 @@
   <f:entry title="Rally Password" field="password"><f:password /></f:entry>
   <f:entry title="Rally Workspace" field="workspace"><f:textbox /></f:entry>
   <f:entry title="Rally Project" field="project"><f:textbox /></f:entry>
-  <f:entry title="Robot File Name Pattern" field="filePattern"><f:textbox /></f:entry>
-  <f:entry title="Robot Test Folder" field="testFolder"><f:textbox /></f:entry>
+  <f:entry title="Robot File Name Pattern" field="filePattern"><f:textbox default="*.xml"/></f:entry>
+  <f:entry title="Robot Test Folder" field="testFolder"><f:textbox default=".."/></f:entry>
   <f:entry title="SCM URI" field="scmuri"><f:textbox /></f:entry>
   <f:entry title="SCM Repository Name" field="scmRepoName"><f:textbox /></f:entry>
   

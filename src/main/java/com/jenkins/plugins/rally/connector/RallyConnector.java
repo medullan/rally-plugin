@@ -21,6 +21,7 @@ import com.rallydev.rest.response.UpdateResponse;
 import com.rallydev.rest.util.Fetch;
 import com.rallydev.rest.util.QueryFilter;
 import java.net.URI;
+import java.text.SimpleDateFormat;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -62,31 +63,77 @@ public class RallyConnector {
     public boolean updateRallyTestCaseResult(
             String name, String description, String suite, String build, boolean passed, String date, String reason)
     throws IOException, NullPointerException {
-        JsonObject testCaseRef = null;//createTestCaseRef(name);
+        JsonObject testCaseRef = createTestCaseRef(name);
         if (testCaseRef == null){
-            testCaseRef = createTestCase(name, description, suite);
-            CreateRequest createRequest = new CreateRequest("TestCase", testCaseRef);
-            CreateResponse createResponse = restApi.create(createRequest);
+            testCaseRef = createTestCase(name, description, null);
+            CreateRequest request = new CreateRequest("TestCase", testCaseRef);
+            CreateResponse response = restApi.create(request);
 
-            //printWarnningsOrErrors(createResponse, rdto, "updateRallyTestCaseResult.createTestCaseRef");
-
-            if(!createResponse.wasSuccessful()) {
+            if(!response.wasSuccessful()) {
                 return false;
             }
+            testCaseRef = response.getObject();
+        }
+        else
+        {
+            JsonObject updateObject = new JsonObject();
+            updateObject.addProperty("FormattedID", testCaseRef.get("FormattedID").getAsString());
+            updateObject.addProperty("Description", description);
+
+            UpdateRequest request = new UpdateRequest(testCaseRef.get("_ref").getAsString(), updateObject);
+            UpdateResponse response = restApi.update(request);
+
+            if(!response.wasSuccessful()) {
+                return false;
+            }
+            testCaseRef = response.getObject();
         }
 
         JsonObject testCaseResult = createTestCaseResult(build, passed, reason, date);
+        JsonObject workspaceRef = testCaseRef.get("Workspace").getAsJsonObject();
 
-        testCaseResult.add("TestCase", testCaseRef); //createResponse.getObject().get("_ref").getAsString();
+        testCaseResult.add("Workspace", workspaceRef);
+        testCaseResult.add("TestCase", testCaseRef);
 
-        CreateRequest createRequest = new CreateRequest("TestCaseResult", testCaseRef);
+        CreateRequest createRequest = new CreateRequest("TestCaseResult", testCaseResult);
         CreateResponse createResponse = restApi.create(createRequest);
-        //printWarnningsOrErrors(createResponse, rdto, "updateRallyTestCaseResult.CreateChangeSet");
 
         return createResponse.wasSuccessful();
     }
 
-    private JsonObject createTestCase(String name, String description, String testPackage)  {
+    public void createTestCaseResult(String name, boolean passed, String build) throws IOException {
+        QueryRequest testCaseRequest = new QueryRequest("TestCase");
+        testCaseRequest.setFetch(new Fetch("FormattedID", "Name", "Workspace"));
+        testCaseRequest.setQueryFilter(new QueryFilter("Name", "=", name));
+
+        testCaseRequest.setWorkspace(workspace);
+        testCaseRequest.setProject(project);
+
+        QueryResponse testCaseQueryResponse = restApi.query(testCaseRequest);
+        JsonObject testCaseJsonObject = testCaseQueryResponse.getResults().get(0).getAsJsonObject();
+        String testCaseRef = testCaseJsonObject.get("_ref").toString();
+        String workspaceRef = testCaseJsonObject.get("Workspace").getAsJsonObject().get("_ref").getAsString();
+
+        //Add a Test Case Result
+        System.out.println("Creating Test Case Result...");
+        java.util.Date date = new java.util.Date();
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ");
+        String timestamp = sdf.format(date);
+
+        JsonObject newTestCaseResult = new JsonObject();
+        newTestCaseResult.addProperty("Verdict", passed ? "Pass" : "Fail");
+        newTestCaseResult.addProperty("Workspace", workspaceRef);
+        newTestCaseResult.addProperty("Date", timestamp);
+        newTestCaseResult.addProperty("Notes", "Automated Test Runs");
+        newTestCaseResult.addProperty("Build", build);
+        //newTestCaseResult.addProperty("Tester", userName);
+        newTestCaseResult.addProperty("TestCase", testCaseRef);
+
+        CreateRequest createRequest = new CreateRequest("testcaseresult", newTestCaseResult);
+        CreateResponse createResponse = restApi.create(createRequest);
+    }
+
+    private JsonObject createTestCase(String name, String description, String workProduct)  {
         JsonObject newObject = new JsonObject();
 
         newObject.addProperty("Name", name);
@@ -94,7 +141,9 @@ public class RallyConnector {
         newObject.addProperty("Type", "Functional");
         newObject.addProperty("Method", "Automated");
 
-        if(testPackage != null) newObject.addProperty("Package", testPackage);
+        if(workProduct != null && !"".equals(workProduct)){
+            newObject.addProperty("WorkProduct", workProduct);
+        }
 
         return newObject;
     }
@@ -105,26 +154,24 @@ public class RallyConnector {
         if(!passed && failReason != null) newObject.addProperty("Notes", failReason);
 
         newObject.addProperty("Build", build);
-        newObject.addProperty("Tester", userName);
+        //newObject.addProperty("Tester", userName);
         newObject.addProperty("Verdict", passed ? "Pass" : "Fail");
         newObject.addProperty("Date", date);
-        //newObject.addProperty("Duration", userName);
 
         return newObject;
     }
 
     private JsonObject createTestCaseRef(String name) throws IOException {
-        QueryRequest  request = new QueryRequest("testcase");
+        QueryRequest  request = new QueryRequest("TestCase");
 
-        request.setFetch(new Fetch("FormattedID","Name", "LastVerdict"));
+        request.setFetch(new Fetch("FormattedID","Name", "Workspace"));
         request.setQueryFilter(new QueryFilter("Name", "=", name));
         request.setWorkspace(workspace);
-        request.setProject(project);
+        //request.setProject(project);
 
         QueryResponse response = restApi.query(request);
-        printWarnningsOrErrors(response, null, "createTestCaseRef");
 
-        if(response.getResults().size() > 0) {
+        if(response.wasSuccessful() && response.getResults().size() > 0) {
             JsonObject jsonObject = response.getResults().get(0).getAsJsonObject();
             return jsonObject;
         }

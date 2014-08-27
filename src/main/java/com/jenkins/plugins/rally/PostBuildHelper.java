@@ -134,7 +134,7 @@ public class PostBuildHelper {
     	String comment = cse.getMsg();
     	if(comment != null) {
     		id = evaluteRegEx(comment, "(US\\d+|DE\\d+)[\\w]*");
-    	}	
+    	}
     	return id;
     }
     

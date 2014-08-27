@@ -299,13 +299,6 @@ public class RobotParser {
                         ignoreUntilEnds(reader, localName);
                     }
                     else{
-                        /*while(reader.hasNext()){
-                            reader.next();
-                            if (reader.isEndElement() && localName.equals(reader.getLocalName())) {
-                                break;
-                            }
-                        }*/
-
                         ignoreUntilEnds(reader, localName);
                         break;
                     }

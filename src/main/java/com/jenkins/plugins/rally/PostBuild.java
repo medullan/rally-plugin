@@ -7,28 +7,18 @@ import hudson.Launcher;
 import hudson.model.BuildListener;
 import hudson.model.AbstractBuild;
 import hudson.model.AbstractProject;
-import hudson.model.Run;
 import hudson.scm.ChangeLogSet;
-import hudson.scm.ChangeLogSet.AffectedFile;
 import hudson.tasks.BuildStepDescriptor;
 import hudson.tasks.Builder;
 
 import java.io.PrintStream;
-import java.text.DateFormat;
 import java.text.SimpleDateFormat;
-import java.util.Calendar;
-import java.util.Date;
 import java.util.List;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
-import org.apache.commons.lang3.StringUtils;
 import org.kohsuke.stapler.DataBoundConstructor;
 
-import com.jenkins.plugins.rally.connector.RallyAttributes;
 import com.jenkins.plugins.rally.connector.RallyConnector;
 import com.jenkins.plugins.rally.connector.RallyDetailsDTO;
-import com.jenkins.plugins.rally.scm.BuildDetails;
 import com.jenkins.plugins.rally.scm.ChangeInformation;
 import com.jenkins.plugins.rally.scm.Changes;
 
@@ -55,19 +45,22 @@ public class PostBuild extends Builder {
 
     // Fields in config.jelly must match the parameter names in the "DataBoundConstructor"
     @DataBoundConstructor
-    public PostBuild(String userName, String password, String workspace, String project, String filePattern, String testFolder, String scmuri, String scmRepoName, String changesSince, String startDate, String endDate, String debugOn, String proxy) {
+    public PostBuild(
+            String userName, String password, String workspace, String project,
+            String filePattern, String testFolder, String scmuri, String scmRepoName,
+            String changesSince, String startDate, String endDate, String debugOn, String proxy) {
         this.userName = userName;
         this.password = password;
     	this.workspace = workspace;
     	this.project = project;
+        this.filePattern = filePattern;
+        this.testFolder = testFolder;
     	this.scmuri = scmuri;
     	this.scmRepoName = scmRepoName;
     	this.changesSince = changesSince;
     	this.startDate = startDate;
     	this.endDate = endDate;
     	this.debugOn = debugOn;
-        this.filePattern = filePattern;
-        this.testFolder = testFolder;
       this.proxy = proxy;
     }
 
@@ -115,6 +108,27 @@ public class PostBuild extends Builder {
 	        		e.printStackTrace(out);
 	        	}
 	        }
+
+            List<RobotCaseResult> results = new RobotParser().parse(filePattern, testFolder, build);
+            for (RobotCaseResult res : results) {
+
+                try {
+                    //rallyConnector.createTestCaseResult(res.getName(), res.isPassed(), "build-automated" );
+
+
+                    SimpleDateFormat robotFormat = new SimpleDateFormat("yyyyMMdd HH:mm:ss.SSS");
+                    SimpleDateFormat rallyFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ");
+                    String end = rallyFormat.format(robotFormat.parse(res.getEndtime()));
+
+                    rallyConnector.updateRallyTestCaseResult(
+                            res.getName(), res.getDescription(), res.getParent().getName(),
+                            "build-automated", res.isPassed(), end, res.getErrorMsg());
+
+                } catch (Exception e) {
+                    out.println("\trally update plug-in error: error while parsing files: " + e.getMessage());
+                    e.printStackTrace(out);
+                }
+            }
         } catch(Exception e) {
         	out.println("\trally update plug-in error: error while creating connection to rally: " + e.getMessage());
         	e.printStackTrace(out);
@@ -126,23 +140,6 @@ public class PostBuild extends Builder {
         	}
         }
 
-        try {
-            List<RobotCaseResult> results = new RobotParser().parse(filePattern, testFolder, build);
-            for (RobotCaseResult res : results) {
-                rallyConnector.updateRallyTestCaseResult(
-                        res.getName(), res.getDescription(), res.getParent().getName(),
-                        "build-automated", res.isPassed(), res.getEndtime(), res.getErrorMsg());
-            }
-        }
-        catch(NullPointerException e) {
-            out.println("\trally update plug-in error: error while parsing files: " + e.getMessage());
-            e.printStackTrace(out);
-        }
-        catch(Exception e) {
-            out.println("\trally update plug-in error: error while parsing files: " + e.getMessage());
-            e.printStackTrace(out);
-        }
-        
         return true;
     }
 	
@@ -184,9 +181,17 @@ public class PostBuild extends Builder {
 		return workspace;
 	}
 
-	public String getProject() {
-		return project;
-	}
+    public String getFilePattern() {
+        return filePattern;
+    }
+
+    public String getTestFolder() {
+        return testFolder;
+    }
+
+    public String getProject() {
+        return project;
+    }
 
 	public String getScmuri() {
 		return scmuri;
@@ -212,7 +217,7 @@ public class PostBuild extends Builder {
 		return debugOn;
 	}   
   
-  public String getProxy(){
+    public String getProxy(){
       return proxy;
   }
 }
