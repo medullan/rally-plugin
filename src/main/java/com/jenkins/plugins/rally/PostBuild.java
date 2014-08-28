@@ -1,31 +1,24 @@
 package com.jenkins.plugins.rally;
 
+import com.jenkins.plugins.rally.robot.RobotParser;
+import com.jenkins.plugins.rally.robot.model.RobotCaseResult;
 import hudson.Extension;
 import hudson.Launcher;
 import hudson.model.BuildListener;
 import hudson.model.AbstractBuild;
 import hudson.model.AbstractProject;
-import hudson.model.Run;
 import hudson.scm.ChangeLogSet;
-import hudson.scm.ChangeLogSet.AffectedFile;
 import hudson.tasks.BuildStepDescriptor;
 import hudson.tasks.Builder;
 
 import java.io.PrintStream;
-import java.text.DateFormat;
 import java.text.SimpleDateFormat;
-import java.util.Calendar;
-import java.util.Date;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
+import java.util.List;
 
-import org.apache.commons.lang3.StringUtils;
 import org.kohsuke.stapler.DataBoundConstructor;
 
-import com.jenkins.plugins.rally.connector.RallyAttributes;
 import com.jenkins.plugins.rally.connector.RallyConnector;
 import com.jenkins.plugins.rally.connector.RallyDetailsDTO;
-import com.jenkins.plugins.rally.scm.BuildDetails;
 import com.jenkins.plugins.rally.scm.ChangeInformation;
 import com.jenkins.plugins.rally.scm.Changes;
 
@@ -39,7 +32,9 @@ public class PostBuild extends Builder {
 	private final String userName;
 	private final String password;
 	private final String workspace;
-	private final String project;
+    private final String project;
+    private final String filePattern;
+    private final String testFolder;
 	private final String scmuri;
 	private final String scmRepoName;
 	private final String changesSince;
@@ -50,11 +45,16 @@ public class PostBuild extends Builder {
 
     // Fields in config.jelly must match the parameter names in the "DataBoundConstructor"
     @DataBoundConstructor
-    public PostBuild(String userName, String password, String workspace, String project, String scmuri, String scmRepoName, String changesSince, String startDate, String endDate, String debugOn, String proxy) {
+    public PostBuild(
+            String userName, String password, String workspace, String project,
+            String filePattern, String testFolder, String scmuri, String scmRepoName,
+            String changesSince, String startDate, String endDate, String debugOn, String proxy) {
         this.userName = userName;
         this.password = password;
     	this.workspace = workspace;
     	this.project = project;
+        this.filePattern = filePattern;
+        this.testFolder = testFolder;
     	this.scmuri = scmuri;
     	this.scmRepoName = scmRepoName;
     	this.changesSince = changesSince;
@@ -67,6 +67,9 @@ public class PostBuild extends Builder {
 	@Override
     public boolean perform(AbstractBuild build, Launcher launcher, BuildListener listener) {
     	PrintStream out = listener.getLogger();
+
+        //out.println("rally-update plugin getting changes...");
+
     	Changes changes = null;
     	changes = PostBuildHelper.getChanges(changesSince, startDate, endDate, build, out);
     	
@@ -74,6 +77,9 @@ public class PostBuild extends Builder {
     	boolean result;
     	try {
     		rallyConnector = new RallyConnector(userName, password, workspace, project, scmuri, scmRepoName, proxy);
+
+            //out.println("rally-update plugin found " + changes.getChangeInformation().size() + " changes...");
+
 	        for(ChangeInformation ci : changes.getChangeInformation()) { //build level
 	        	try {
 		        	for(Object item : ci.getChangeLogSet().getItems()) { //each changes in above build
@@ -95,13 +101,34 @@ public class PostBuild extends Builder {
 			        		}
 		        		} else {
 		        			out.println("Could not update rally due to absence of id in a comment " + rdto.getMsg());
-		        		}	
+		        		}
 		        	}
 	        	} catch(Exception e) {
 	        		out.println("\trally update plug-in error: could not iterate or populate through getChangeLogSet().getItems(): "  + e.getMessage()); 
 	        		e.printStackTrace(out);
 	        	}
 	        }
+
+            List<RobotCaseResult> results = new RobotParser().parse(filePattern, testFolder, build);
+            for (RobotCaseResult res : results) {
+
+                try {
+                    //rallyConnector.createTestCaseResult(res.getName(), res.isPassed(), "build-automated" );
+
+
+                    SimpleDateFormat robotFormat = new SimpleDateFormat("yyyyMMdd HH:mm:ss.SSS");
+                    SimpleDateFormat rallyFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ");
+                    String end = rallyFormat.format(robotFormat.parse(res.getEndtime()));
+
+                    rallyConnector.updateRallyTestCaseResult(
+                            res.getName(), res.getDescription(), res.getParent().getName(),
+                            "build-automated", res.isPassed(), end, res.getErrorMsg());
+
+                } catch (Exception e) {
+                    out.println("\trally update plug-in error: error while parsing files: " + e.getMessage());
+                    e.printStackTrace(out);
+                }
+            }
         } catch(Exception e) {
         	out.println("\trally update plug-in error: error while creating connection to rally: " + e.getMessage());
         	e.printStackTrace(out);
@@ -111,8 +138,8 @@ public class PostBuild extends Builder {
         	} catch(Exception e) {out.println("\trally update plug-in error: error while closing connection: " + e.getMessage()); 
         		e.printStackTrace(out);
         	}
-        }	
-        
+        }
+
         return true;
     }
 	
@@ -154,9 +181,17 @@ public class PostBuild extends Builder {
 		return workspace;
 	}
 
-	public String getProject() {
-		return project;
-	}
+    public String getFilePattern() {
+        return filePattern;
+    }
+
+    public String getTestFolder() {
+        return testFolder;
+    }
+
+    public String getProject() {
+        return project;
+    }
 
 	public String getScmuri() {
 		return scmuri;
@@ -182,7 +217,7 @@ public class PostBuild extends Builder {
 		return debugOn;
 	}   
   
-  public String getProxy(){
+    public String getProxy(){
       return proxy;
   }
 }
