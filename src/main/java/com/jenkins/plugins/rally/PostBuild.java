@@ -14,6 +14,8 @@ import hudson.tasks.Builder;
 import java.io.PrintStream;
 import java.text.SimpleDateFormat;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import org.kohsuke.stapler.DataBoundConstructor;
 
@@ -110,22 +112,31 @@ public class PostBuild extends Builder {
 	        }
 
             List<RobotCaseResult> results = new RobotParser().parse(filePattern, testFolder, build);
-            for (RobotCaseResult res : results) {
+            Pattern p = Pattern.compile("(US\\d+|DE\\d+)[\\w]*", Pattern.CASE_INSENSITIVE);
 
+            for (RobotCaseResult res : results) {
                 try {
                     //rallyConnector.createTestCaseResult(res.getName(), res.isPassed(), "build-automated" );
-
-
                     SimpleDateFormat robotFormat = new SimpleDateFormat("yyyyMMdd HH:mm:ss.SSS");
                     SimpleDateFormat rallyFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ");
                     String end = rallyFormat.format(robotFormat.parse(res.getEndtime()));
+                    String workProduct = null;
+
+                    // extract the work product if one was set on the test case
+                    for(String tag: res.getTags()){
+                        Matcher m = p.matcher(tag);
+                        if(m.find()) {
+                            workProduct = m.group(1).toUpperCase();
+                            break;
+                        }
+                    }
 
                     rallyConnector.updateRallyTestCaseResult(
-                            res.getName(), res.getDescription(), res.getParent().getName(),
+                            res.getName(), res.getDescription(), workProduct,
                             "build-automated", res.isPassed(), end, res.getErrorMsg());
 
                 } catch (Exception e) {
-                    out.println("\trally update plug-in error: error while parsing files: " + e.getMessage());
+                    out.println("\trally update plug-in error: error setting test case result: " + e.getMessage());
                     e.printStackTrace(out);
                 }
             }

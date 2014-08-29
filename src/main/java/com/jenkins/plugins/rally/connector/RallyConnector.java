@@ -61,11 +61,11 @@ public class RallyConnector {
 	}
 
     public boolean updateRallyTestCaseResult(
-            String name, String description, String suite, String build, boolean passed, String date, String reason)
+            String name, String description, String workProduct, String build, boolean passed, String date, String reason)
     throws IOException, NullPointerException {
         JsonObject testCaseRef = createTestCaseRef(name);
         if (testCaseRef == null){
-            testCaseRef = createTestCase(name, description, null);
+            testCaseRef = createTestCase(name, description, workProduct);
             CreateRequest request = new CreateRequest("TestCase", testCaseRef);
             CreateResponse response = restApi.create(request);
 
@@ -126,7 +126,6 @@ public class RallyConnector {
         newTestCaseResult.addProperty("Date", timestamp);
         newTestCaseResult.addProperty("Notes", "Automated Test Runs");
         newTestCaseResult.addProperty("Build", build);
-        //newTestCaseResult.addProperty("Tester", userName);
         newTestCaseResult.addProperty("TestCase", testCaseRef);
 
         CreateRequest createRequest = new CreateRequest("testcaseresult", newTestCaseResult);

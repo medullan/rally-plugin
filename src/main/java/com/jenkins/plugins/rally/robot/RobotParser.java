@@ -305,7 +305,7 @@ public class RobotParser {
                 }
             }
 
-            return StringUtils.join(keywords, "\n");
+            return StringUtils.join(keywords, "<br />");
         }
 
         private List<String> processTags(XMLStreamReader reader) throws XMLStreamException {
