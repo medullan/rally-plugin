@@ -12,7 +12,9 @@ import hudson.tasks.BuildStepDescriptor;
 import hudson.tasks.Builder;
 
 import java.io.PrintStream;
+import java.text.ParseException;
 import java.text.SimpleDateFormat;
+import java.util.Date;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -37,7 +39,7 @@ public class PostBuild extends Builder {
     private final String project;
     private final String filePattern;
     private final String testFolder;
-	private final String scmuri;
+    private final String scmuri;
 	private final String scmRepoName;
 	private final String changesSince;
 	private final String startDate;
@@ -63,7 +65,7 @@ public class PostBuild extends Builder {
     	this.startDate = startDate;
     	this.endDate = endDate;
     	this.debugOn = debugOn;
-      this.proxy = proxy;
+        this.proxy = proxy;
     }
 
 	@Override
@@ -74,19 +76,24 @@ public class PostBuild extends Builder {
 
     	Changes changes = null;
     	changes = PostBuildHelper.getChanges(changesSince, startDate, endDate, build, out);
+
     	
     	RallyConnector rallyConnector = null;
     	boolean result;
     	try {
+            String lastCommitId = build.getEnvironment(listener).expand("${GIT_BRANCH}:${GIT_COMMIT}");
+            int indexOfOriginSlash = lastCommitId.indexOf("/"), indexOfColon = lastCommitId.indexOf(":");
+            lastCommitId = lastCommitId.substring(indexOfOriginSlash + 1, indexOfColon + 8 + 1);
+
     		rallyConnector = new RallyConnector(userName, password, workspace, project, scmuri, scmRepoName, proxy);
 
-            //out.println("rally-update plugin found " + changes.getChangeInformation().size() + " changes...");
+            out.println("rally-update plugin found " + changes.getChangeInformation().size() + " changes...");
 
 	        for(ChangeInformation ci : changes.getChangeInformation()) { //build level
 	        	try {
 		        	for(Object item : ci.getChangeLogSet().getItems()) { //each changes in above build
 		        		ChangeLogSet.Entry cse = (ChangeLogSet.Entry) item;
-		        		RallyDetailsDTO rdto = PostBuildHelper.populateRallyDetailsDTO(debugOn, build, ci, cse, out);
+		        		RallyDetailsDTO rdto = PostBuildHelper.populateRallyDetailsDTO(debugOn, build, ci, cse, lastCommitId, out);
 		        		if(!rdto.getId().isEmpty()) {
 			        		try {
 			        			result = rallyConnector.updateRallyChangeSet(rdto);
@@ -112,14 +119,16 @@ public class PostBuild extends Builder {
 	        }
 
             List<RobotCaseResult> results = new RobotParser().parse(filePattern, testFolder, build);
-            Pattern p = Pattern.compile("(US\\d+|DE\\d+)[\\w]*", Pattern.CASE_INSENSITIVE);
+            Pattern p = Pattern.compile("(US\\d+|DE\\d+)", Pattern.CASE_INSENSITIVE);
+
+            if(lastCommitId == null){
+                lastCommitId = "automated-build:" + (new Date()).getTime();
+            }
 
             for (RobotCaseResult res : results) {
                 try {
                     //rallyConnector.createTestCaseResult(res.getName(), res.isPassed(), "build-automated" );
-                    SimpleDateFormat robotFormat = new SimpleDateFormat("yyyyMMdd HH:mm:ss.SSS");
-                    SimpleDateFormat rallyFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ");
-                    String end = rallyFormat.format(robotFormat.parse(res.getEndtime()));
+                    String end = getDateFormattedForRally(res.getEndtime());
                     String workProduct = null;
 
                     // extract the work product if one was set on the test case
@@ -133,7 +142,7 @@ public class PostBuild extends Builder {
 
                     rallyConnector.updateRallyTestCaseResult(
                             res.getName(), res.getDescription(), workProduct,
-                            "build-automated", res.isPassed(), end, res.getErrorMsg());
+                            lastCommitId, res.isPassed(), end, res.getErrorMsg());
 
                 } catch (Exception e) {
                     out.println("\trally update plug-in error: error setting test case result: " + e.getMessage());
@@ -153,8 +162,13 @@ public class PostBuild extends Builder {
 
         return true;
     }
-	
-	
+
+    private String getDateFormattedForRally(String time) throws ParseException {
+        SimpleDateFormat robotFormat = new SimpleDateFormat("yyyyMMdd HH:mm:ss.SSS");
+        SimpleDateFormat rallyFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ssZ");
+        return rallyFormat.format(robotFormat.parse(time));
+    }
+
 
     @Override
     public DescriptorImpl getDescriptor() {
@@ -204,9 +218,9 @@ public class PostBuild extends Builder {
         return project;
     }
 
-	public String getScmuri() {
-		return scmuri;
-	}
+    public String getScmuri() {
+        return scmuri;
+    }
 
     public String getScmRepoName() {
 		return scmRepoName;

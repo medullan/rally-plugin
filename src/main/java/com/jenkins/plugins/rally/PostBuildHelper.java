@@ -38,11 +38,13 @@ public class PostBuildHelper {
     	return changes;
 	}
 	
-    static RallyDetailsDTO populateRallyDetailsDTO(String debugOn, final AbstractBuild build, final ChangeInformation ci, final ChangeLogSet.Entry cse, PrintStream out) {
+    static RallyDetailsDTO populateRallyDetailsDTO(
+            String debugOn, final AbstractBuild build, final ChangeInformation ci, final ChangeLogSet.Entry cse,
+            String buildIdentifier, PrintStream out) {
     	RallyDetailsDTO rdto = new RallyDetailsDTO();
     	rdto.setOrigBuildNumber(ci.getBuildNumber());
     	rdto.setCurrentBuildNumber(String.valueOf(build.number));    	    	
-    	rdto.setMsg(getMessage(cse, rdto.getOrigBuildNumber(), rdto.getCurrentBuildNumber()));		
+    	rdto.setMsg(buildIdentifier + ":" + getMessage(cse, rdto.getOrigBuildNumber(), rdto.getCurrentBuildNumber()));
 		rdto.setFileNameAndTypes(getFileNameAndTypes(cse));
 		rdto.setId(getId(cse));
 		rdto.setOut(out);
@@ -133,7 +135,7 @@ public class PostBuildHelper {
     	String id = "";
     	String comment = cse.getMsg();
     	if(comment != null) {
-    		id = evaluteRegEx(comment, "(US\\d+|DE\\d+)[\\w]*");
+    		id = evaluteRegEx(comment, "(US\\d+|DE\\d+)");
     	}
     	return id;
     }
@@ -144,6 +146,6 @@ public class PostBuildHelper {
 		Matcher m = p.matcher(comment);
 		if(m.find())
 			result = m.group(1);
-		return result;
+		return result.toUpperCase();
     }
 }
