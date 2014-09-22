@@ -83,7 +83,9 @@ public class PostBuild extends Builder {
     	try {
             String lastCommitId = build.getEnvironment(listener).expand("${GIT_BRANCH}:${GIT_COMMIT}");
             int indexOfOriginSlash = lastCommitId.indexOf("/"), indexOfColon = lastCommitId.indexOf(":");
-            lastCommitId = lastCommitId.substring(indexOfOriginSlash + 1, indexOfColon + 8 + 1);
+            lastCommitId = lastCommitId.substring(
+                    indexOfOriginSlash + 1,
+                    indexOfColon + 8 + 1);
 
     		rallyConnector = new RallyConnector(userName, password, workspace, project, scmuri, scmRepoName, proxy);
 
