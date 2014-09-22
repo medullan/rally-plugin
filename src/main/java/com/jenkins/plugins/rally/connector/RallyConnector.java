@@ -61,11 +61,11 @@ public class RallyConnector {
 	}
 
     public boolean updateRallyTestCaseResult(
-            String name, String description, String suite, String build, boolean passed, String date, String reason)
+            String name, String description, String workProduct, String build, boolean passed, String date, String reason)
     throws IOException, NullPointerException {
         JsonObject testCaseRef = createTestCaseRef(name);
         if (testCaseRef == null){
-            testCaseRef = createTestCase(name, description, null);
+            testCaseRef = createTestCase(name, description, workProduct);
             CreateRequest request = new CreateRequest("TestCase", testCaseRef);
             CreateResponse response = restApi.create(request);
 
@@ -126,14 +126,13 @@ public class RallyConnector {
         newTestCaseResult.addProperty("Date", timestamp);
         newTestCaseResult.addProperty("Notes", "Automated Test Runs");
         newTestCaseResult.addProperty("Build", build);
-        //newTestCaseResult.addProperty("Tester", userName);
         newTestCaseResult.addProperty("TestCase", testCaseRef);
 
         CreateRequest createRequest = new CreateRequest("testcaseresult", newTestCaseResult);
         CreateResponse createResponse = restApi.create(createRequest);
     }
 
-    private JsonObject createTestCase(String name, String description, String workProduct)  {
+    private JsonObject createTestCase(String name, String description, String workProduct) throws IOException {
         JsonObject newObject = new JsonObject();
 
         newObject.addProperty("Name", name);
@@ -142,7 +141,10 @@ public class RallyConnector {
         newObject.addProperty("Method", "Automated");
 
         if(workProduct != null && !"".equals(workProduct)){
-            newObject.addProperty("WorkProduct", workProduct);
+            JsonObject parent = createHierarchicalRequirementRef(workProduct);
+            if(parent != null) {
+                newObject.add("WorkProduct", parent);
+            }
         }
 
         return newObject;
@@ -184,8 +186,10 @@ public class RallyConnector {
 		JsonObject newChangeset = createChangeSet(rdto);
 	    CreateRequest createRequest = new CreateRequest("Changeset", newChangeset);
 	    CreateResponse createResponse = restApi.create(createRequest);
+
     	printWarnningsOrErrors(createResponse, rdto, "updateRallyChangeSet.CreateChangeSet");
-	    String csRef = createResponse.getObject().get("_ref").getAsString();	    
+	    String csRef = createResponse.getObject().get("_ref").getAsString();
+
 	    for(int i=0; i<rdto.getFileNameAndTypes().length;i++) {
 	    	JsonObject newChange = createChange(csRef, rdto.getFileNameAndTypes()[i][0], rdto.getFileNameAndTypes()[i][1]);	    
 	    	CreateRequest cRequest = new CreateRequest("change", newChange);
@@ -197,7 +201,8 @@ public class RallyConnector {
 	
 	private JsonObject createChangeSet(RallyDetailsDTO rdto) throws IOException {
 		JsonObject newChangeset = new JsonObject();
-		JsonObject scmJsonObject = createSCMRef(rdto);		
+		JsonObject scmJsonObject = createSCMRef(rdto);
+
         newChangeset.add("SCMRepository", scmJsonObject); 
         //newChangeset.addProperty("Author", createUserRef());
        	newChangeset.addProperty("Revision", rdto.getRevison());
@@ -227,18 +232,35 @@ public class RallyConnector {
         JsonObject storyJsonObject = storyQueryResponse.getResults().get(0).getAsJsonObject();
         return storyJsonObject;
 	}
-	
-	private JsonObject createDefectRef(RallyDetailsDTO rdto) throws IOException {
-		QueryRequest defectRequest = new QueryRequest("defect");
-		defectRequest.setFetch(new Fetch("FormattedId", "Name", "Changesets"));
-		defectRequest.setQueryFilter(new QueryFilter("FormattedID", "=", rdto.getId()));
-		defectRequest.setWorkspace(workspace);		
-		defectRequest.setScopedDown(true);
-		QueryResponse defectResponse = restApi.query(defectRequest);
-		printWarnningsOrErrors(defectResponse, rdto, "createDefectRef");
-		JsonObject defectJsonObject = defectResponse.getResults().get(0).getAsJsonObject();
-		return defectJsonObject;
-	}
+
+    private JsonObject createDefectRef(RallyDetailsDTO rdto) throws IOException {
+        QueryRequest defectRequest = new QueryRequest("defect");
+        defectRequest.setFetch(new Fetch("FormattedId", "Name", "Changesets"));
+        defectRequest.setQueryFilter(new QueryFilter("FormattedID", "=", rdto.getId()));
+        defectRequest.setWorkspace(workspace);
+        defectRequest.setScopedDown(true);
+        QueryResponse defectResponse = restApi.query(defectRequest);
+        printWarnningsOrErrors(defectResponse, rdto, "createDefectRef");
+        JsonObject defectJsonObject = defectResponse.getResults().get(0).getAsJsonObject();
+        return defectJsonObject;
+    }
+
+    private JsonObject createHierarchicalRequirementRef(String formattedId) throws IOException {
+        QueryRequest hrequest = new QueryRequest("hierarchicalrequirement");
+
+        hrequest.setFetch(new Fetch("FormattedId", "Name"));
+        hrequest.setQueryFilter(new QueryFilter("FormattedID", "=", formattedId));
+        hrequest.setWorkspace(workspace);
+        hrequest.setScopedDown(true);
+
+        QueryResponse hresponse = restApi.query(hrequest);
+
+        if(hresponse.getResults().size() > 0) {
+            JsonObject refJsonObject = hresponse.getResults().get(0).getAsJsonObject();
+            return refJsonObject;
+        }
+        return null;
+    }
 	
 	private JsonObject createChange(String csRef, String fileName, String fileType) {
 		JsonObject newChange = new JsonObject();
