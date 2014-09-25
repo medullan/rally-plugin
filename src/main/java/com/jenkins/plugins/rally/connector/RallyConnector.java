@@ -301,7 +301,7 @@ public class RallyConnector {
     }
 
     private JsonObject createHierarchicalRequirementRef(String formattedId) throws IOException {
-        QueryRequest hrequest = new QueryRequest("hierarchicalrequirement");
+        QueryRequest hrequest = new QueryRequest(formattedId.startsWith("DE") ? "defect" : "hierarchicalrequirement");
 
         hrequest.setFetch(new Fetch("FormattedId", "Name"));
         hrequest.setQueryFilter(new QueryFilter("FormattedID", "=", formattedId));
