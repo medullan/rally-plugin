@@ -45,6 +45,7 @@ public class RobotCaseResult extends RobotTestObject{
 	private String starttime;
 	private String endtime;
     private String description;
+    private String file;
 	private List<String> tags;
 
 	private RobotSuiteResult parent;
@@ -105,13 +106,19 @@ public class RobotCaseResult extends RobotTestObject{
 		}
 	}
 
-	public String getStarttime() {
-		return starttime;
-	}
+    public String getFile() {
+        return file;
+    }
 
-	public void setStarttime(String starttime) {
-		this.starttime = starttime;
-	}
+    public void setFile(String file) { this.file = file; }
+
+    public String getStarttime() {
+        return starttime;
+    }
+
+    public void setStarttime(String starttime) {
+        this.starttime = starttime;
+    }
 
 	public String getEndtime() {
 		return endtime;
