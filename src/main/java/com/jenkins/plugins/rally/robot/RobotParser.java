@@ -15,30 +15,30 @@
  */
 package com.jenkins.plugins.rally.robot;
 
-        import hudson.AbortException;
-        import hudson.FilePath;
-        import hudson.Util;
-        import hudson.model.AbstractBuild;
-        import com.jenkins.plugins.rally.robot.model.RobotTestObject;
-        import com.jenkins.plugins.rally.robot.model.RobotCaseResult;
-        import com.jenkins.plugins.rally.robot.model.RobotResult;
-        import com.jenkins.plugins.rally.robot.model.RobotSuiteResult;
-        import hudson.remoting.VirtualChannel;
+import hudson.AbortException;
+import hudson.FilePath;
+import hudson.Util;
+import hudson.model.AbstractBuild;
+import com.jenkins.plugins.rally.robot.model.RobotTestObject;
+import com.jenkins.plugins.rally.robot.model.RobotCaseResult;
+import com.jenkins.plugins.rally.robot.model.RobotResult;
+import com.jenkins.plugins.rally.robot.model.RobotSuiteResult;
+import hudson.remoting.VirtualChannel;
 
-        import java.io.File;
-        import java.io.FileInputStream;
-        import java.io.IOException;
-        import java.util.ArrayList;
-        import java.util.List;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 
-        import javax.xml.stream.Location;
-        import javax.xml.stream.XMLInputFactory;
-        import javax.xml.stream.XMLStreamException;
-        import javax.xml.stream.XMLStreamReader;
+import javax.xml.stream.Location;
+import javax.xml.stream.XMLInputFactory;
+import javax.xml.stream.XMLStreamException;
+import javax.xml.stream.XMLStreamReader;
 
-        import org.apache.commons.lang.StringUtils;
-        import org.apache.tools.ant.DirectoryScanner;
-        import org.apache.tools.ant.types.FileSet;
+import org.apache.commons.lang.StringUtils;
+import org.apache.tools.ant.DirectoryScanner;
+import org.apache.tools.ant.types.FileSet;
 
 public class RobotParser {
 
@@ -54,6 +54,7 @@ public class RobotParser {
 
         private static final long serialVersionUID = 1L;
         private final String outputFileLocations;
+        private String nameOnly;
         private List<RobotCaseResult> results = new ArrayList<RobotCaseResult>();
 
         public RobotParserCallable(String outputFileLocations) {
@@ -72,17 +73,20 @@ public class RobotParser {
                     .getDirectoryScanner();
 
             String[] files = resultScanner.getIncludedFiles();
-            if (files.length == 0) {
-                throw new AbortException(
-                        "No files found in path " + ws.getAbsolutePath() + " with configured filemask: " + outputFileLocations);
-            }
             RobotResult result = new RobotResult();
+            if (files.length == 0) {
+                return result;
+                //throw new AbortException(
+                //        "No files found in path " + ws.getAbsolutePath() + " with configured filemask: " + outputFileLocations);
+            }
 
             for(String file : files){
                 XMLInputFactory factory = XMLInputFactory.newInstance();
                 factory.setProperty(XMLInputFactory.IS_COALESCING, Boolean.TRUE);
                 File baseDirectory = resultScanner.getBasedir();
                 File reportFile = new File(baseDirectory, file);
+
+                nameOnly = reportFile.getAbsoluteFile().getParentFile().getName();
 
                 //get the potential directories emerging from the use of GLOB filemask accounted in the splitted file parsing
                 String dirFromFileGLOB = new File(file).getParent();
@@ -274,6 +278,7 @@ public class RobotParser {
             }
             ignoreUntilEnds(reader, "test");
 
+            caseResult.setFile(nameOnly);
             results.add(caseResult);
 
             return caseResult;

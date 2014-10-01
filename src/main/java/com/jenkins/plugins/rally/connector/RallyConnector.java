@@ -20,8 +20,12 @@ import com.rallydev.rest.response.Response;
 import com.rallydev.rest.response.UpdateResponse;
 import com.rallydev.rest.util.Fetch;
 import com.rallydev.rest.util.QueryFilter;
+
 import java.net.URI;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Hashtable;
+import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -39,6 +43,9 @@ public class RallyConnector {
 	public static final String APPLICATION_NAME = "RallyConnect";
 	public static final String WSAPI_VERSION = "v2.0";
 	private String DEFAULT_REPO_NAME_CREATED_BY_PLUGIN = "plugin_repo";
+    private Hashtable<String, JsonObject> mapTestSet = new Hashtable<String, JsonObject>();
+    private List<JsonObject> testResults = new ArrayList<JsonObject>();
+    private Hashtable<String, JsonArray> mapTestSetTestCases = new Hashtable<String, JsonArray>();
 	
 	public RallyConnector(final String userName, final String password, final String workspace, final String project, final String scmuri, final String scmRepoName, final String proxy) throws URISyntaxException {
 		this.userName = userName;
@@ -61,8 +68,8 @@ public class RallyConnector {
 	}
 
     public boolean updateRallyTestCaseResult(
-            String name, String description, String workProduct, String build, boolean passed, String date, String reason)
-    throws IOException, NullPointerException {
+            String name, String description, String workProduct, String build, boolean passed, String date,
+            String reason, String testSet) throws IOException, NullPointerException {
         JsonObject testCaseRef = createTestCaseRef(name);
         if (testCaseRef == null){
             testCaseRef = createTestCase(name, description, workProduct);
@@ -89,17 +96,64 @@ public class RallyConnector {
             testCaseRef = response.getObject();
         }
 
-        JsonObject testCaseResult = createTestCaseResult(build, passed, reason, date);
+        JsonObject testCase = new JsonObject();
+        testCase.addProperty("_ref", testCaseRef.get("_ref").getAsString());
+        addTestCaseToTestSet(testCase, testSet);
+
+        JsonObject testCaseResult = createTestCaseResult(build, passed, reason, date, testSet);
         JsonObject workspaceRef = testCaseRef.get("Workspace").getAsJsonObject();
 
-        testCaseResult.add("Workspace", workspaceRef);
-        testCaseResult.add("TestCase", testCaseRef);
+        testCaseResult.addProperty("Workspace", workspaceRef.get("_ref").getAsString());
+        testCaseResult.addProperty("TestCase", testCaseRef.get("_ref").getAsString());
 
-        CreateRequest createRequest = new CreateRequest("TestCaseResult", testCaseResult);
-        CreateResponse createResponse = restApi.create(createRequest);
+        testResults.add(testCaseResult);
 
-        return createResponse.wasSuccessful();
+        //CreateRequest createRequest = new CreateRequest("TestCaseResult", testCaseResult);
+        //CreateResponse createResponse = restApi.create(createRequest);
+
+        return true; //createResponse.wasSuccessful();
     }
+
+    public void createResultsInTestSets(boolean debugOn, PrintStream out) throws IOException {
+        // add all the test cases to the correct test set
+        for(String buildKey: mapTestSetTestCases.keySet()){
+            JsonObject testSet = mapTestSet.get(buildKey);
+            JsonObject testSetToAddTo = new JsonObject();
+
+            testSetToAddTo.addProperty("_ref", testSet.get("_ref").getAsString());
+            testSetToAddTo.add("TestCases", mapTestSetTestCases.get(buildKey) );
+
+            UpdateRequest updateTestSetRequest = new UpdateRequest(testSet.get("_ref").getAsString(), testSetToAddTo);
+            UpdateResponse updateResponse = restApi.update(updateTestSetRequest);
+
+            if(!updateResponse.wasSuccessful() && debugOn){
+                for(String error: updateResponse.getErrors()) {
+                    out.println("update-plugin failed to add test cases to test set: " + error);
+                }
+            }
+        }
+
+        // create all the test results that were enlisted
+        for(JsonObject testCaseResult : testResults){
+            CreateRequest createRequest = new CreateRequest("TestCaseResult", testCaseResult);
+            CreateResponse createResponse = restApi.create(createRequest);
+
+            if(!createResponse.wasSuccessful() && debugOn){
+                for(String error: createResponse.getErrors()) {
+                    out.println("update-plugin failed to add test case result: " + error);
+                }
+            }
+        }
+    }
+
+    private void addTestCaseToTestSet(JsonObject testCase, String testSet){
+        if(!mapTestSetTestCases.containsKey(testSet)){
+            mapTestSetTestCases.put(testSet, new JsonArray());
+        }
+
+        mapTestSetTestCases.get(testSet).add(testCase);
+    }
+
 
     public void createTestCaseResult(String name, boolean passed, String build) throws IOException {
         QueryRequest testCaseRequest = new QueryRequest("TestCase");
@@ -150,7 +204,7 @@ public class RallyConnector {
         return newObject;
     }
 
-    private JsonObject createTestCaseResult(String build, boolean passed, String failReason, String date) {
+    private JsonObject createTestCaseResult(String build, boolean passed, String failReason, String date, String testSet) {
         JsonObject newObject = new JsonObject();
 
         if(!passed && failReason != null) newObject.addProperty("Notes", failReason);
@@ -159,6 +213,7 @@ public class RallyConnector {
         //newObject.addProperty("Tester", userName);
         newObject.addProperty("Verdict", passed ? "Pass" : "Fail");
         newObject.addProperty("Date", date);
+        newObject.addProperty("TestSet", createTestSet(testSet, build).get("_ref").getAsString());
 
         return newObject;
     }
@@ -246,7 +301,7 @@ public class RallyConnector {
     }
 
     private JsonObject createHierarchicalRequirementRef(String formattedId) throws IOException {
-        QueryRequest hrequest = new QueryRequest("hierarchicalrequirement");
+        QueryRequest hrequest = new QueryRequest(formattedId.startsWith("DE") ? "defect" : "hierarchicalrequirement");
 
         hrequest.setFetch(new Fetch("FormattedId", "Name"));
         hrequest.setQueryFilter(new QueryFilter("FormattedID", "=", formattedId));
@@ -261,15 +316,44 @@ public class RallyConnector {
         }
         return null;
     }
-	
-	private JsonObject createChange(String csRef, String fileName, String fileType) {
-		JsonObject newChange = new JsonObject();
-	    newChange.addProperty("PathAndFilename", fileName);
-	    newChange.addProperty("Action", fileType);	    
-	    newChange.addProperty("Uri", scmuri);
+
+    private JsonObject createTestSet(String name, String build) {
+        if(mapTestSet.containsKey(name)){
+            return mapTestSet.get(name);
+        }
+
+        JsonObject newTestSet = new JsonObject();
+        newTestSet.addProperty("Name", name);
+        newTestSet.addProperty("Notes", build);
+        newTestSet.addProperty("Description", "Automated Tests for build " + build + " on environment " + name);
+        //newTestSet.addProperty("Project", project);
+        //newTestSet.addProperty("Release", Release_ID);
+        //newTestSet.addProperty("Iteration", Iteration_ID);
+        //newTestSet.add("TestCases", testCaseList);
+
+        try {
+            CreateRequest createRequest = new CreateRequest("testset", newTestSet);
+            CreateResponse createResponse = restApi.create(createRequest);
+
+            JsonObject ref = createResponse.getObject();
+            mapTestSet.put(name, ref);
+            return ref;
+        }
+        catch(IOException ex){
+
+        }
+
+        return null;
+    }
+
+    private JsonObject createChange(String csRef, String fileName, String fileType) {
+        JsonObject newChange = new JsonObject();
+        newChange.addProperty("PathAndFilename", fileName);
+        newChange.addProperty("Action", fileType);
+        newChange.addProperty("Uri", scmuri);
         newChange.addProperty("Changeset", csRef);
         return newChange;
-	}
+    }
 		
 	public boolean updateRallyTaskDetails(RallyDetailsDTO rdto) throws IOException {
 		boolean result = false;
