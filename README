@@ -5,4 +5,5 @@ This is a Jenkins Plug-in which
 
 3> This plugin saves developer efforts of writing check-in hooks for SCM tools (svn, cvs, perforce etc) inorder to update rally changsets which is difficult if organisation uses more than one config management tool.
 
-also see [wiki page](https://wiki.jenkins-ci.org/display/JENKINS/Rally+plugin)
+also see [forked wiki page](https://wiki.jenkins-ci.org/display/JENKINS/Rally+plugin)
+and [Medullan's documentation](https://medullan.atlassian.net/wiki/display/QA/Rally+Update+Jenkins+Plugin+Configuration)
